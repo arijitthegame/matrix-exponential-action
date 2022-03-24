@@ -2,7 +2,9 @@ import torch
 import time
 from einops import rearrange, repeat
 
-
+'''
+Code adapted from https://github.com/sbarratt/torch_cg with a bunch of my modifications. If bugs are found, please contact @arijitthegame
+'''
 
 def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, verbose=False):
     """Solves a batch of PD matrix linear systems using the preconditioned CG algorithm.
