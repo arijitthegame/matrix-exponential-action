@@ -1,5 +1,7 @@
 import torch
 import time
+from einops import rearrange, repeat
+
 
 
 def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, verbose=False):
@@ -9,10 +11,10 @@ def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, ve
     where A_i is a n x n positive definite matrix and B_i is a n x m matrix,
     and X_i is the n x m matrix representing the solution for the ith system.
     Args:
-        A_bmm: A callable that performs a batch matrix multiply of A and a K x n x m matrix.
+        A_bmm: a K x n x m matrix.
         B: A K x n x m matrix representing the right hand sides.
-        M_bmm: (optional) A callable that performs a batch matrix multiply of the preconditioning
-            matrices M and a K x n x m matrix. (default=identity matrix)
+        M_bmm: (optional) the preconditioning
+            matrices M of shape K x n x m matrix. (default=identity matrix)
         X0: (optional) Initial guess for X, defaults to M_bmm(B). (default=None)
         rtol: (optional) Relative tolerance for norm of residual. (default=1e-3)
         atol: (optional) Absolute tolerance for norm of residual. (default=0)
@@ -22,9 +24,9 @@ def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, ve
     K, n, m = B.shape
 
     if M_bmm is None:
-        M_bmm = lambda x: x
+        M_bmm = repeat(torch.eye(n), ' row col -> 1 row col')
     if X0 is None:
-        X0 = M_bmm(B)
+        X0 = torch.bmm(M_bmm, B)
     if maxiter is None:
         maxiter = 5 * n
 
@@ -34,8 +36,8 @@ def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, ve
     assert isinstance(maxiter, int)
 
     X_k = X0
-    R_k = B - A_bmm(X_k)
-    Z_k = M_bmm(R_k)
+    R_k = B - torch.bmm(A_bmm,X_k)
+    Z_k = torch.bmm(M_bmm, R_k)
 
     P_k = torch.zeros_like(Z_k)
 
@@ -56,7 +58,7 @@ def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, ve
     start = time.perf_counter()
     for k in range(1, maxiter + 1):
         start_iter = time.perf_counter()
-        Z_k = M_bmm(R_k)
+        Z_k = torch.bmm(M_bmm, R_k)
 
         if k == 1:
             P_k = Z_k
@@ -75,14 +77,14 @@ def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, ve
             beta = (R_k1 * Z_k1).sum(1) / denominator
             P_k = Z_k1 + beta.unsqueeze(1) * P_k1
 
-        denominator = (P_k * A_bmm(P_k)).sum(1)
+        denominator = (P_k * torch.bmm(A_bmm, P_k)).sum(1)
         denominator[denominator == 0] = 1e-8
         alpha = (R_k1 * Z_k1).sum(1) / denominator
         X_k = X_k1 + alpha.unsqueeze(1) * P_k
-        R_k = R_k1 - alpha.unsqueeze(1) * A_bmm(P_k)
+        R_k = R_k1 - alpha.unsqueeze(1) * torch.bmm(A_bmm, P_k)
         end_iter = time.perf_counter()
 
-        residual_norm = torch.norm(A_bmm(X_k) - B, dim=1)
+        residual_norm = torch.norm(torch.bmm(A_bmm, X_k) - B, dim=1)
 
         if verbose:
             print("%03d | %8.4e %4.2f" %
@@ -113,21 +115,29 @@ def cg_batch(A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, ve
 
 
 class CG(torch.autograd.Function):
+    #Throws error if A_bmm is set grad to be True 
+        
+    @staticmethod
+    def forward(ctx, A_bmm, B, M_bmm=None, X0=None, rtol=1e-3, atol=0., maxiter=None, verbose=False):
+        
+        ctx.A_bmm = A_bmm
+        ctx.M_bmm = M_bmm
+        ctx.rtol = rtol
+        ctx.atol = atol
+        ctx.maxiter = maxiter
+        ctx.verbose = verbose
+        
+        X, _ = cg_batch(A_bmm, B, M_bmm, X0=X0, rtol=rtol,
+                     atol=atol, maxiter=maxiter, verbose=verbose)
+        ctx.save_for_backward(B, X)
 
-    def __init__(self, A_bmm, M_bmm=None, rtol=1e-3, atol=0., maxiter=None, verbose=False):
-        self.A_bmm = A_bmm
-        self.M_bmm = M_bmm
-        self.rtol = rtol
-        self.atol = atol
-        self.maxiter = maxiter
-        self.verbose = verbose
-
-    def forward(self, B, X0=None):
-        X, _ = cg_batch(self.A_bmm, B, M_bmm=self.M_bmm, X0=X0, rtol=self.rtol,
-                     atol=self.atol, maxiter=self.maxiter, verbose=self.verbose)
         return X
 
-    def backward(self, dX):
-        dB, _ = cg_batch(self.A_bmm, dX, M_bmm=self.M_bmm, rtol=self.rtol,
-                      atol=self.atol, maxiter=self.maxiter, verbose=self.verbose)
-        return dB
+    @staticmethod
+    def backward(ctx, dX):
+
+        
+        B, X, = ctx.saved_tensors
+        dB, _ = cg_batch(ctx.A_bmm, dX, ctx.M_bmm, rtol=ctx.rtol,
+                      atol=ctx.atol, maxiter=ctx.maxiter, verbose=ctx.verbose)
+        return dB, None
