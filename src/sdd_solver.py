@@ -42,3 +42,16 @@ def gauss_seidel(A, b, tolerance=1e-10, max_iterations=10000):
             break
 
     return x
+
+# test
+if name == '__main__':
+    from scipy.linalg import solve
+
+    A = A = np.random.rand(200,200)
+    A1 = A + A.transpose() + 200*np.identity(200)
+    b = np.random.rand(200)
+    x = np.random.rand(200)
+    y = jacobi(A1,b,x, 2000)
+    y1 = solve(A1,b)
+    print("Jacobi approx solution:", y)
+    print("Actual Solution :", y1) 
