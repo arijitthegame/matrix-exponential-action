@@ -4,12 +4,13 @@ from collections import deque
 
 '''
 Add ball and cone cuts : important components for star decomposition. 
-This code implements start decomposition for unweighted trees. 
+This code implements start decomposition for unweighted trees. The code can easily be generalized to weighted trees. m
+Needs to add in the Dijstra's algorithm
 '''
 
 
 def get_ball(distances, radius):
-    ball = []
+    ball = [].
     d = 0
     while d <= radius:
         ball+=distances[d]
@@ -44,12 +45,12 @@ def ball_cut(G, dist_from_center, rho, delta, num_edges, source):
 def get_ideal(G, S, anchor, distances):
     ideal = [anchor]
     # BFS from anchor
-    seen = {anchor : 0}                  # level (number of hops) when seen in BFS
+    seen = {anchor : 0}                  # create dict level (number of hops) when seen in BFS
     level = 0                  # the current level
     nextlevel = set(G.adj[anchor])     # dict of nodes to check at next level
     temp=set()
 
-    while nextlevel:
+    while nextlevel: #TODO: Test this while loop. Maybe buggy
         thislevel = nextlevel  # advance to next level
         nextlevel = set()         # and start a new list (fringe)
         for v in thislevel:
@@ -131,7 +132,7 @@ def boundary_neighbors(G, node_boundary):
         neighbors.update(G.adj[node])
     return neighbors
 
-# returns dictionary of shortest path lengths to the node boundary
+# returns dictionary of shortest path lengths to the node boundary. For weighted trees we will need Dijstra's algorithm.
 def contracted_distances(G, node_boundary):
     neighs = boundary_neighbors(G, node_boundary)
     H = G.copy()
@@ -139,8 +140,10 @@ def contracted_distances(G, node_boundary):
     v = 's'
     H.add_node(v)
     for neigh in neighs:
-        if neigh in node_boundary: continue
-        else: H.add_edge(v, neigh)
+        if neigh in node_boundary: 
+            continue
+        else: 
+            H.add_edge(v, neigh)
     return nx.single_source_shortest_path_length(H, v)
 
 # decomposes graph into cones
@@ -152,7 +155,8 @@ def cone_decomp(H, node_boundary, Delta, num_edges):
         r, cone = cone_cut(H, anchor, 0, Delta, node_boundary, num_edges, node_boundary_distances)
         for node in cone:
             H.remove_node(node)
-            if node in node_boundary: node_boundary.remove(node)
+            if node in node_boundary: 
+                node_boundary.remove(node)
         cones += [(cone, anchor)]
         anchors.append(anchor)
     return cones, anchors
