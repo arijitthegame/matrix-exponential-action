@@ -1,6 +1,7 @@
 # pylint: skip-file
 
 import numpy as np 
+from tqdm import trange
 import torch 
 
 from lanczos import lanczos
@@ -39,13 +40,50 @@ def compute_lanczos_matrix_exp(A, v, k, use_reorthogonalization=False, return_ex
       return w, exp_A
 
 
-def compute_exprational_matrix_exp(A, v, k, return_exp=False):
+def compute_exprational_matrix_exp(A, v, k, return_exp=False, method_type='cg', tolerance=1e-6, eps=1e-15):
     '''
     This is the algorithm as described in figure 5 of https://arxiv.org/abs/1111.1491
     SDD solver in the paper is not implemented however we can use CG or Gauss-Siedel or Jacobi methods instead
+    Args: A matrix A of shape b x n x n, 
+        v vector of shape B x n, 
+        k number of eigenvectors to compute, 
+        return_exp=True if you want to return the approximate exponential matrix
+        method_type = 'cg' or 'jacobi' or 'gauss_seidel'
+
+    A vector u such that ||exp(-A)v - u|| ≤ ε
     '''
-    #TODO
-    pass
+    #TODO: CHECK SHAPES
+
+    A = [None] * (k+1)
+    V = [None] * (k+1)
+    for i in trange(k):
+      if method_type == 'cg':
+        V[0] = v
+        w, = cg_batch(A, v, r_tol=tolerance)
+        for j in range(i):
+          A[j][i] = torch.einsum('ij, kj -> ik', v, w)
+
+        #orthogonalize
+        w = w - torch.einsum('ij, kj -> ik', A[j][i], v)
+        A[i+1][i] = torch.norm(w, dim=1) + eps
+        V[i+1] = w / A[i+1][i]
+
+      else:
+        raise NotImplementedError("Other methods are not yet implemented")
+
+    T_hat = .5 * (A + A.transpose(1,2))
+    # B = exp (k (I − T^{-1}) exactly  
+    # WHAT IS THE EASISET WAY TO INVERT T_hat???
+
+    #TODO: FINISH THIS
+
+    return NOne
+
+
+      
+
+
+
 
 
 if __name__ == "__main__":
