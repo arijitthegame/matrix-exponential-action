@@ -51,5 +51,5 @@ def compute_exprational_matrix_exp(A, v, k, return_exp=False):
 if __name__ == "__main__":
     A =  A = torch.randn(3, 6400, 6400)
     A = A + A.transpose(1,2)
-    v = torch.rand(3, 6400)
+    v = torch.nn.functional.normalize(torch.rand(3, 6400), dim =1)
     w = compute_lanczos_matrix_exp(A, v, k=64)
