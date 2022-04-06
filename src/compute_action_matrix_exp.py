@@ -26,7 +26,7 @@ def compute_lanczos_matrix_exp(A, v, k, use_reorthogonalization=False, return_ex
     T, Q = lanczos(A, num_eig_vec=k, mask=None, use_reorthogonalization=use_reorthogonalization)
 
     D, P = torch.linalg.eigh(T) 
-    exp_T = torch.bmm(torch.bmm(P, torch.exp(torch.diag_embed(D))), P.transpose(1, 2))
+    exp_T = torch.bmm(torch.bmm(P, torch.diag_embed(torch.exp(D))), P.transpose(1, 2))
 
     #compute the action
 
