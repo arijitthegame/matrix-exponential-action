@@ -1,4 +1,7 @@
+# pylint: skip-file
+
 import torch
+from torch.nn import functional as F
 
 '''
 Code adopted from lanczosnet https://arxiv.org/abs/1901.01484
@@ -112,7 +115,7 @@ def lanczos(A, num_eig_vec, mask=None, use_reorthogonalization=False):
       pad = (0, num_eig_vec - lanczos_iter, 0,
              num_eig_vec - lanczos_iter)
       T = F.pad(T, pad)
-      pad = (0, self.num_eig_vec - lanczos_iter)
+      pad = (0, num_eig_vec - lanczos_iter)
       Q = F.pad(Q, pad)
 
     return T, Q
