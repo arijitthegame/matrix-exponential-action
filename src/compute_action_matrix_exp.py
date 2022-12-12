@@ -8,6 +8,14 @@ from lanczos import lanczos
 from conjugate_gradient import conjugate_grad_torch
 from sdd_solver import *
 
+def is_psd(mat):
+    """
+    Check if the matrix is positive semi-definite. 
+    Note in PSD def, we want the matrices are symmetric otherwise it will lead to a lot of issues. 
+    For example : see https://math.stackexchange.com/questions/83134/does-non-symmetric-positive-definite-matrix-have-positive-eigenvalues
+    """
+    return bool((mat == mat.T).all() and (torch.linalg.eigvalsh(mat)[0]>=0))
+
 # TODO: ADD SPARSE FROM HAN
 def compute_lanczos_matrix_exp(
     A, v, k, use_reorthogonalization=False, return_exp=False
@@ -20,7 +28,7 @@ def compute_lanczos_matrix_exp(
 
     #TODO: ADD NECESSARY CHECKS FOR SHAPES
     """
-
+    
     if len(v.shape) == 1:
         v = v.unsqueeze(0)
 
@@ -51,24 +59,30 @@ def compute_exprational_matrix_exp(
     This is the algorithm as described in figure 5 of https://arxiv.org/abs/1111.1491
     SDD solver in the paper is not implemented however we can use CG or Gauss-Siedel or Jacobi methods or a torch solver to solve linear equations.
     So far torch solver is very stable and produces good results.
-    Args: A matrix A of shape b x n x n,
-        v vector of shape B x n,
+    Args: A PSD matrix A of shape n x n,
+        v vector of shape n x 1,
         k number of eigenvectors to compute,
-        return_exp=True if you want to return the approximate exponential matrix
         method_type = 'cg' or 'jacobi' or 'gauss_seidel' or 'torchsolve'
 
     A vector u such that ||exp(-A)v - u|| ≤ ε
+    For this algorithm , v needs to be an unit vector otherwise normalize v
     """
+
+    assert is_psd(A) is True, "This algorithm only works for PSD"
+
     Alpha = torch.empty(k + 1, k + 1)
     V = torch.empty(A.shape[0], k + 1)
+    norm_v = torch.linalg.norm(v)
+    if norm_v != 1. :
+        v = v/norm_v #normalize the vector
     V[:, 0] = v.squeeze()
     for i in range(k):
         W = torch.empty(A.shape[0], 1)
         if method_type == "torchsolve":
-            w = torch.linalg.solve(A, V[:, i].reshape(-1, 1))
+            w = torch.linalg.solve((torch.eye(A.shape[0]) + A/k), V[:, i].reshape(-1, 1))
             W = w
         elif method_type == "cg":
-            w = conjugate_grad_torch(A, V[:, i].reshape(-1, 1)).reshape(-1, 1)
+            w = conjugate_grad_torch((torch.eye(A.shape[0]) + A/k), V[:, i].reshape(-1, 1)).reshape(-1, 1)
             W = w
         else:
             raise NotImplementedError("Other methods are not yet implemented")
@@ -91,4 +105,4 @@ def compute_exprational_matrix_exp(
     )
 
     approx_vec = V @ B[:, 0]
-    return approx_vec
+    return approx_vec * norm_v
