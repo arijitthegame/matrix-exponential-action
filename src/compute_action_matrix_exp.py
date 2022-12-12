@@ -1,20 +1,18 @@
 # pylint: skip-file
-
-import numpy as np
-from tqdm import trange
 import torch
-
 from lanczos import lanczos
 from conjugate_gradient import conjugate_grad_torch
 from sdd_solver import *
 
+
 def is_psd(mat):
     """
-    Check if the matrix is positive semi-definite. 
-    Note in PSD def, we want the matrices are symmetric otherwise it will lead to a lot of issues. 
+    Check if the matrix is positive semi-definite.
+    Note in PSD def, we want the matrices are symmetric otherwise it will lead to a lot of issues.
     For example : see https://math.stackexchange.com/questions/83134/does-non-symmetric-positive-definite-matrix-have-positive-eigenvalues
     """
-    return bool((mat == mat.T).all() and (torch.linalg.eigvalsh(mat)[0]>=0))
+    return bool((mat == mat.T).all() and (torch.linalg.eigvalsh(mat)[0] >= 0))
+
 
 # TODO: ADD SPARSE FROM HAN
 def compute_lanczos_matrix_exp(
@@ -24,13 +22,22 @@ def compute_lanczos_matrix_exp(
     Compute the action of matrix exponential on a vector v using the Lanczos algorithm.
     Can also optionally return the approximate exponential matrix too
     This is figure 4 in https://arxiv.org/abs/1111.1491
+    A is assumed to be of shape B x N x N
     v is assumed to be of shape B x N
-
-    #TODO: ADD NECESSARY CHECKS FOR SHAPES
+    Compute :
+        A vector u that is an approximation to exp(-B)v.
     """
-    
+
     if len(v.shape) == 1:
         v = v.unsqueeze(0)
+
+    if len(A.shape) == 3:
+        for i in range(A.shape[0]):
+            assert is_psd(A[i]), "All matrices in this batch needs to be PSD"
+
+    # normalize v
+    norm_v = torch.linalg.norm(v, dim=1, keepdim=True)
+    v = v / norm_v
 
     # compute Q, T via Lanczos, T is the tridiagonal matrix with shape k x k and Q is of shape n x k
     T, Q = lanczos(
@@ -38,13 +45,13 @@ def compute_lanczos_matrix_exp(
     )
 
     D, P = torch.linalg.eigh(T)
-    exp_T = torch.bmm(torch.bmm(P, torch.diag_embed(torch.exp(D))), P.transpose(1, 2))
+    exp_T = torch.bmm(torch.bmm(P, torch.diag_embed(torch.exp(-D))), P.transpose(1, 2))
 
     # compute the action
 
     exp_A = torch.bmm(torch.bmm(Q, exp_T), Q.transpose(1, 2))
 
-    w = torch.einsum("ijk, ik -> ij", exp_A, v)
+    w = torch.einsum("ijk, ik -> ij", exp_A, v) * norm_v
 
     if return_exp is False:
         return w
@@ -73,16 +80,20 @@ def compute_exprational_matrix_exp(
     Alpha = torch.empty(k + 1, k + 1)
     V = torch.empty(A.shape[0], k + 1)
     norm_v = torch.linalg.norm(v)
-    if norm_v != 1. :
-        v = v/norm_v #normalize the vector
+    if norm_v != 1.0:
+        v = v / norm_v  # normalize the vector
     V[:, 0] = v.squeeze()
     for i in range(k):
         W = torch.empty(A.shape[0], 1)
         if method_type == "torchsolve":
-            w = torch.linalg.solve((torch.eye(A.shape[0]) + A/k), V[:, i].reshape(-1, 1))
+            w = torch.linalg.solve(
+                (torch.eye(A.shape[0]) + A / k), V[:, i].reshape(-1, 1)
+            )
             W = w
         elif method_type == "cg":
-            w = conjugate_grad_torch((torch.eye(A.shape[0]) + A/k), V[:, i].reshape(-1, 1)).reshape(-1, 1)
+            w = conjugate_grad_torch(
+                (torch.eye(A.shape[0]) + A / k), V[:, i].reshape(-1, 1)
+            ).reshape(-1, 1)
             W = w
         else:
             raise NotImplementedError("Other methods are not yet implemented")
