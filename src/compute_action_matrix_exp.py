@@ -22,10 +22,10 @@ def compute_lanczos_matrix_exp(
     Compute the action of matrix exponential on a vector v using the Lanczos algorithm.
     Can also optionally return the approximate exponential matrix too
     This is figure 4 in https://arxiv.org/abs/1111.1491
-    A is assumed to be of shape B x N x N
+    A is assumed to be of shape B x N x N, a batch of symmetric PSD.
     v is assumed to be of shape B x N
     Compute :
-        A vector u that is an approximation to exp(-B)v.
+        A vector u that is an approximation to exp(-A)v.
     """
 
     if len(v.shape) == 1:
