@@ -31,9 +31,9 @@ def compute_lanczos_matrix_exp(
     if len(v.shape) == 1:
         v = v.unsqueeze(0)
 
-    if len(A.shape) == 3:
-        for i in range(A.shape[0]):
-            assert is_psd(A[i]), "All matrices in this batch needs to be PSD"
+    # if len(A.shape) == 3:
+    #     for i in range(A.shape[0]):
+    #         assert is_psd(A[i]), "All matrices in this batch needs to be PSD"
 
     # normalize v
     norm_v = torch.linalg.norm(v, dim=1, keepdim=True)
