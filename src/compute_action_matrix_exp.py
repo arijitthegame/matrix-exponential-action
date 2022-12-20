@@ -75,13 +75,10 @@ def compute_exprational_matrix_exp(
     For this algorithm , v needs to be an unit vector otherwise normalize v
     """
 
-    assert is_psd(A) is True, "This algorithm only works for PSD"
-
-    Alpha = torch.empty(k + 1, k + 1)
-    V = torch.empty(A.shape[0], k + 1)
+    Alpha = torch.ones(k + 1, k + 1)
+    V = torch.zeros(A.shape[0], k + 1)
     norm_v = torch.linalg.norm(v)
-    if norm_v != 1.0:
-        v = v / norm_v  # normalize the vector
+    v = v/norm_v
     V[:, 0] = v.squeeze()
     for i in range(k):
         W = torch.empty(A.shape[0], 1)
@@ -91,29 +88,30 @@ def compute_exprational_matrix_exp(
             )
             W = w
         elif method_type == "cg":
+            assert is_psd(A) is True, "This algorithm only works for PSD"
             w = conjugate_grad_torch(
-                (torch.eye(A.shape[0]) + A / k), V[:, i].reshape(-1, 1)
+                (torch.eye(A.shape[0]) + A / k), V[:, i].reshape(-1, 1), tolerance=tolerance
             ).reshape(-1, 1)
             W = w
         else:
             raise NotImplementedError("Other methods are not yet implemented")
 
         temp_vec = torch.zeros(W.shape[0], 1)
-        for j in range(i):
+        for j in range(i+1):
             Alpha[j][i] = torch.dot(V[:, j], W.squeeze())
             temp_vec += Alpha[j][i] * V[:, j].reshape(-1, 1)
 
-            # orthogonalize
-        w = w - temp_vec
-        Alpha[i + 1][i] = torch.norm(W.squeeze()) + eps
-        V[:, i + 1] = W.squeeze() / Alpha[i + 1][i]
+        # orthogonalize
+        w = W - temp_vec
+        Alpha[i + 1][i] = torch.norm(w.squeeze()) + eps
+        V[:, i + 1] = w.squeeze() / Alpha[i + 1][i]
         for j in range(i + 2, k + 1):
-            A[j][i] = 0
+            Alpha[j][i] = 0
 
     T_hat = 0.5 * (Alpha + Alpha.t())
+   
     B = torch.linalg.matrix_exp(
         k * (torch.eye(T_hat.shape[0]) - torch.linalg.inv(T_hat))
     )
-
-    approx_vec = V @ B[:, 0]
+    approx_vec = torch.matmul(V,B)[:, 0]
     return approx_vec * norm_v
