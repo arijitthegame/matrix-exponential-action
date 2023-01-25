@@ -49,13 +49,19 @@ def compute_lanczos_matrix_exp(
 
     # compute the action
 
-    exp_A = torch.bmm(torch.bmm(Q, exp_T), Q.transpose(1, 2))
+    exp_A = torch.bmm(torch.bmm(Q, exp_T))
+    
+    # if len(exp_A.squeeze().shape)==2: 
+    #     w = exp_A[:,0]*norm_v
+    # else :
+    #     w = exp_A[: :,0:,0] * norm_v
 
     w = torch.einsum("ijk, ik -> ij", exp_A, v) * norm_v
 
     if return_exp is False:
         return w
     else:
+        # raise ValueError("Fast exponential does not allow for the materialization of exp")
         return w, exp_A
 
 
